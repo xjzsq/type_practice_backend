@@ -16,9 +16,37 @@ const errbody = {                                                               
 }
 app
     .use(jwtKoa({ secret }).unless({
-        path: [/^\/createsalt/, /^\/register/, /^\/getsalt/, /^\/login/]                    //数组中的路径不需要通过jwt验证
+        path: [/^\/createsalt/,/^\/createsalt/, /^\/register/, /^\/getsalt/, /^\/login/]                    //数组中的路径不需要通过jwt验证
     }))
 router
+    .get('/createsalt/check', async (ctx, next) => {
+        const user = ctx.request.query;
+        if (user && user.name) {
+            let hasRegistration = false;
+            let userinfo = JSON.parse(fs.readFileSync('./user.json', 'utf-8'));             // 读取用户信息
+            for (let i in userinfo) {
+                if (userinfo[i] && userinfo[i].name && userinfo[i].name === user.name) {    // 是否已经注册
+                    hasRegistration = true;
+                    break;
+                }
+            }
+            if (hasRegistration) {                                                          // 已经注册则返回已存在
+                ctx.body = {
+                    message: '用户名已存在',
+                    code: -1
+                }
+            }
+            else{
+                ctx.body = {
+                    message: '用户名可以注册',
+                    code: 1
+                }
+            }
+        }
+        else {
+            ctx.body = errbody;
+        }
+    })
     .get('/createsalt', async (ctx, next) => {                                              // 新用户注册创建salt
         const user = ctx.request.query;
         if (user && user.name) {
@@ -112,6 +140,7 @@ router
     })
     .post('/login', async (ctx, next) => {
         const user = ctx.request.body;
+        console.log(user, ctx.request);
         if (user && user.name && user.password) {
             let userinfo = JSON.parse(fs.readFileSync('./user.json', 'utf-8'));
             let success = false;
@@ -168,6 +197,6 @@ router
 app
     .use(router.routes())
     .use(router.allowedMethods())
-app.listen(3000, () => {
-    console.log('app listening 3000...')
+app.listen(6088, () => {
+    console.log('app listening 6088...')
 })
