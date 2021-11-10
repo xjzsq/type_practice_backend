@@ -16,7 +16,7 @@ const errbody = {                                                               
 }
 app
     .use(jwtKoa({ secret }).unless({
-        path: [/^\/createsalt/,/^\/createsalt/, /^\/register/, /^\/getsalt/, /^\/login/]                    //数组中的路径不需要通过jwt验证
+        path: [/^\/createsalt/, /^\/createsalt/, /^\/register/, /^\/getsalt/, /^\/login/]                    //数组中的路径不需要通过jwt验证
     }))
 router
     .get('/createsalt/check', async (ctx, next) => {
@@ -36,7 +36,7 @@ router
                     code: -1
                 }
             }
-            else{
+            else {
                 ctx.body = {
                     message: '用户名可以注册',
                     code: 1
@@ -97,6 +97,9 @@ router
                         }
                     } else {
                         userinfo[i].password = user.password;
+                        userinfo[i].practiceRecord = [];
+                        userinfo[i].game = 0;
+                        userinfo[i].score = 0;
                         fs.writeFileSync('./user.json', JSON.stringify(userinfo));
                         ctx.body = {
                             message: '注册成功！',
@@ -154,7 +157,8 @@ router
                     ctx.body = {
                         message: '登陆成功！',
                         code: 1,
-                        token
+                        token,
+                        isAdmin: ('isAdmin' in userinfo[i])
                     }
                     break;
                 }
@@ -170,7 +174,9 @@ router
         }
     })
     .get('/userInfo', async (ctx) => {
+        console.log(ctx.header);
         const token = ctx.header.authorization  // 获取jwt
+        console.log(token, ctx.header);
         let payload
         if (token) {
             payload = await verify(token.split(' ')[1], secret)  // 解密，获取payload
@@ -179,13 +185,291 @@ router
             let info;
             for (let i in userinfo) {
                 if (userinfo[i].name === name) {
-                    info = userinfo[i];
+                    info = {
+                        name: userinfo[i].name,
+                        isAdmin: ('isAdmin' in userinfo[i]),
+                        game: userinfo[i].game,
+                        score: userinfo[i].score
+                    };
                     break;
                 }
             }
             ctx.body = {
                 message: '成功！',
+                code: 1,
                 info
+            }
+        } else {
+            ctx.body = {
+                message: 'token 错误',
+                code: -1
+            }
+        }
+    })
+    .get('/practiceInfo', async (ctx) => {
+        console.log(ctx.header);
+        const token = ctx.header.authorization  // 获取jwt
+        console.log(token, ctx.header);
+        let payload
+        if (token) {
+            payload = await verify(token.split(' ')[1], secret)  // 解密，获取payload
+            let name = payload.name
+            let userinfo = JSON.parse(fs.readFileSync('./user.json', 'utf-8'));
+            let info;
+            for (let i in userinfo) {
+                if (userinfo[i].name === name) {
+                    info = userinfo[i].practiceRecord;
+                    break;
+                }
+            }
+            ctx.body = {
+                message: '成功！',
+                code: 1,
+                info
+            }
+        } else {
+            ctx.body = {
+                message: 'token 错误',
+                code: -1
+            }
+        }
+    })
+    .get('/getwords', async (ctx) => {
+        const token = ctx.header.authorization;  // 获取jwt
+        let payload;
+        if (token) {
+            payload = await verify(token.split(' ')[1], secret)  // 解密，获取payload
+            // let name = payload.name
+            let dicts = JSON.parse(fs.readFileSync('./dict.json', 'utf-8'));
+            let words = dicts['words'];
+            ctx.body = {
+                message: '成功！',
+                code: 1,
+                words
+            }
+        } else {
+            ctx.body = {
+                message: 'token 错误',
+                code: -1
+            }
+        }
+    })
+    .get('/getpara', async (ctx) => {
+        const token = ctx.header.authorization;  // 获取jwt
+        let payload;
+        if (token) {
+            payload = await verify(token.split(' ')[1], secret)  // 解密，获取payload
+            // let name = payload.name
+            let dicts = JSON.parse(fs.readFileSync('./dict.json', 'utf-8'));
+            let paras = dicts['paragraphs'];
+            ctx.body = {
+                message: '成功！',
+                code: 1,
+                paras
+            }
+        } else {
+            ctx.body = {
+                message: 'token 错误',
+                code: -1
+            }
+        }
+    })
+    .get('/getgame', async (ctx) => {
+        const token = ctx.header.authorization;  // 获取jwt
+        let payload;
+        if (token) {
+            payload = await verify(token.split(' ')[1], secret)  // 解密，获取payload
+            // let name = payload.name
+            let dicts = JSON.parse(fs.readFileSync('./dict.json', 'utf-8'));
+            console.log(ctx.request.query);
+            let game = dicts.game[parseInt(ctx.request.query.game)];
+            console.log(dicts.game[parseInt(ctx.request.query.game)]);
+            ctx.body = {
+                message: '成功！',
+                code: 1,
+                game: game
+            }
+        } else {
+            ctx.body = {
+                message: 'token 错误',
+                code: -1
+            }
+        }
+    })
+    .post('/postwords', async (ctx) => {
+        const token = ctx.header.authorization;  // 获取jwt
+        const addWords = JSON.parse(ctx.request.body);
+        let payload;
+        if (token) {
+            payload = await verify(token.split(' ')[1], secret);  // 解密，获取payload
+            let name = payload.name;
+            let dicts = JSON.parse(fs.readFileSync('./dict.json', 'utf-8'));
+            addWords.map((word, i) => {
+                dicts['words'].push({
+                    label: word.label,
+                    author: name,
+                    text: word.text
+                });
+            })
+            fs.writeFileSync('./dict.json', JSON.stringify(dicts));
+            ctx.body = {
+                message: '成功！',
+                code: 1
+            }
+        } else {
+            ctx.body = {
+                message: 'token 错误',
+                code: -1
+            }
+        }
+    })
+    .post('/uploadRecord', async (ctx) => {
+        const token = ctx.header.authorization;  // 获取jwt
+        const record = JSON.parse(ctx.request.body.result);
+        console.log(record);
+        let payload;
+        if (token) {
+            payload = await verify(token.split(' ')[1], secret);  // 解密，获取payload
+            let name = payload.name;
+            let userinfo = JSON.parse(fs.readFileSync('./user.json', 'utf-8'));
+            for (let i in userinfo) {
+                if (userinfo[i].name === name) {
+                    // if (!('practiceRecord' in userinfo)) userinfo[i]['practiceRecord'] = []
+                    userinfo[i]['practiceRecord'].push(record);
+                    break;
+                }
+            }
+            fs.writeFileSync('./user.json', JSON.stringify(userinfo));
+            ctx.body = {
+                message: '成功！',
+                code: 1
+            }
+        } else {
+            ctx.body = {
+                message: 'token 错误',
+                code: -1
+            }
+        }
+    })
+    .get('/adminUserInfo', async (ctx) => {
+        console.log(ctx.header);
+        const token = ctx.header.authorization  // 获取jwt
+        console.log(token, ctx.header);
+        let payload
+        if (token) {
+            payload = await verify(token.split(' ')[1], secret)  // 解密，获取payload
+            let name = payload.name
+            let userinfo = JSON.parse(fs.readFileSync('./user.json', 'utf-8'));
+            let info;
+            for (let i in userinfo) {
+                if (userinfo[i].name === name) {
+                    if ('isAdmin' in userinfo[i] && userinfo[i]['isAdmin'] == true) {
+                        info = userinfo
+                        break;
+                    }
+                }
+            }
+            ctx.body = {
+                message: '成功！',
+                code: 1,
+                info
+            }
+        } else {
+            ctx.body = {
+                message: 'token 错误',
+                code: -1
+            }
+        }
+    })
+    .get('/deleteUser', async (ctx) => {
+        console.log(ctx.header);
+        const token = ctx.header.authorization  // 获取jwt
+        console.log(token, ctx.header);
+        let payload
+        if (token) {
+            payload = await verify(token.split(' ')[1], secret)  // 解密，获取payload
+            let name = payload.name
+            let userinfo = JSON.parse(fs.readFileSync('./user.json', 'utf-8'));
+            let ok = false, admin = false;
+            for (let i in userinfo) {
+                if (userinfo[i].name === name) {
+                    if ('isAdmin' in userinfo[i] && userinfo[i]['isAdmin'] == true) {
+                        admin = true;
+                        for (let j in userinfo) {
+                            if (userinfo[j].name == ctx.request.query.name) {
+                                userinfo.splice(j, 1);
+                                fs.writeFileSync('./user.json', JSON.stringify(userinfo));
+                                ok = true;
+                                break;
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+            if (admin) {
+                if (ok) ctx.body = {
+                    message: '成功！',
+                    code: 1
+                }
+                else ctx.body = {
+                    message: '没有找到用户！',
+                    code: -1
+                }
+            } else {
+                ctx.body = {
+                    message: '无权限！',
+                    code: -1
+                }
+            }
+        } else {
+            ctx.body = {
+                message: 'token 错误',
+                code: -1
+            }
+        }
+    })
+    .post('/postGame', async (ctx) => {
+        const token = ctx.header.authorization;  // 获取jwt
+        let payload;
+        if (token) {
+            payload = await verify(token.split(' ')[1], secret);  // 解密，获取payload
+            let name = payload.name;
+            let userinfo = JSON.parse(fs.readFileSync('./user.json', 'utf-8'));
+            for (let i in userinfo) {
+                if (userinfo[i].name === name) {
+                    userinfo[i].game = ctx.request.body.game;
+                    userinfo[i].score = ctx.request.body.score;
+                    break;
+                }
+            }
+            fs.writeFileSync('./user.json', JSON.stringify(userinfo));
+            ctx.body = {
+                message: '成功！',
+                code: 1
+            }
+        } else {
+            ctx.body = {
+                message: 'token 错误',
+                code: -1
+            }
+        }
+    })
+    .get('/getrank', async (ctx) => {
+        const token = ctx.header.authorization  // 获取jwt
+        let payload
+        if (token) {
+            payload = await verify(token.split(' ')[1], secret)  // 解密，获取payload
+            let name = payload.name
+            let userinfo = JSON.parse(fs.readFileSync('./user.json', 'utf-8'));
+            let rank = [];
+            for (let i in userinfo) {
+                rank.push({ name: userinfo[i].name, score: userinfo[i].score });
+            }
+            ctx.body = {
+                message: '成功！',
+                code: 1,
+                rank
             }
         } else {
             ctx.body = {
